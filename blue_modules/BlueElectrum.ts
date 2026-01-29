@@ -13,6 +13,7 @@ import { ElectrumServerItem } from '../screen/settings/ElectrumSettings';
 import { triggerWarningHapticFeedback } from './hapticFeedback';
 import { AlertButton } from 'react-native';
 import { uint8ArrayToHex, stringToUint8Array, hexToUint8Array } from './uint8array-extras/index';
+import BC2_MAINNET from './bc2-network';
 
 const ElectrumClient = require('electrum-client');
 const net = require('net');
@@ -83,19 +84,20 @@ export const ELECTRUM_SSL_PORT = 'electrum_ssl_port';
 export const ELECTRUM_SERVER_HISTORY = 'electrum_server_history';
 const ELECTRUM_CONNECTION_DISABLED = 'electrum_disabled';
 const storageKey = 'ELECTRUM_PEERS';
-const defaultPeer = { host: 'electrum1.bluewallet.io', ssl: 443 };
+
+// =============================================================================
+// BC2 ELECTRUM SERVERS
+// =============================================================================
+const defaultPeer = { host: 'Bitcoin-II.ddns.net', ssl: 50009 };
+
 export const hardcodedPeers: Peer[] = [
-  { host: 'mainnet.foundationdevices.com', ssl: 50002 },
-  { host: 'bitcoin.lu.ke', ssl: 50002 },
-  // { host: 'electrum.jochen-hoenicke.de', ssl: '50006' },
-  { host: 'electrum1.bluewallet.io', ssl: 443 },
-  { host: 'electrum.acinq.co', ssl: 50002 },
-  { host: 'electrum.bitaroo.net', ssl: 50002 },
+  { host: 'Bitcoin-II.ddns.net', tcp: 50008, ssl: 50009 },
 ];
 
 export const suggestedServers: Peer[] = hardcodedPeers.map(peer => ({
   ...peer,
 }));
+// =============================================================================
 
 let mainClient: typeof ElectrumClient | undefined;
 let mainConnected: boolean = false;
@@ -278,7 +280,7 @@ export async function connectMain(): Promise<void> {
         setTimeout(connectMain, usingPeer.host.endsWith('.onion') ? 4000 : 500);
       }
     };
-    const ver = await mainClient.initElectrum({ client: 'bluewallet', version: '1.4' });
+    const ver = await mainClient.initElectrum({ client: 'bc2wallet', version: '1.4' });
     if (ver && ver[0]) {
       console.log('connected to ', ver);
       serverName = ver[0];
@@ -490,7 +492,7 @@ async function getRandomDynamicPeer(): Promise<Peer> {
 export const getBalanceByAddress = async function (address: string): Promise<{ confirmed: number; unconfirmed: number }> {
   try {
     if (!mainClient) throw new Error('Electrum client is not connected');
-    const script = bitcoin.address.toOutputScript(address);
+    const script = bitcoin.address.toOutputScript(address, BC2_MAINNET);
     const hash = bitcoinjs_crypto_sha256(script);
     const reversedHash = new Uint8Array(hash).reverse();
     const balance = await mainClient.blockchainScripthash_getBalance(uint8ArrayToHex(reversedHash));
@@ -518,7 +520,7 @@ export const getSecondsSinceLastRequest = function () {
 
 export const getTransactionsByAddress = async function (address: string): Promise<ElectrumHistory[]> {
   if (!mainClient) throw new Error('Electrum client is not connected');
-  const script = bitcoin.address.toOutputScript(address);
+  const script = bitcoin.address.toOutputScript(address, BC2_MAINNET);
   const hash = bitcoinjs_crypto_sha256(script);
   const reversedHash = new Uint8Array(hash).reverse();
   const history = await mainClient.blockchainScripthash_getHistory(uint8ArrayToHex(reversedHash));
@@ -531,7 +533,7 @@ export const getTransactionsByAddress = async function (address: string): Promis
 
 export const getMempoolTransactionsByAddress = async function (address: string): Promise<MempoolTransaction[]> {
   if (!mainClient) throw new Error('Electrum client is not connected');
-  const script = bitcoin.address.toOutputScript(address);
+  const script = bitcoin.address.toOutputScript(address, BC2_MAINNET);
   const hash = bitcoinjs_crypto_sha256(script);
   const reversedHash = new Uint8Array(hash).reverse();
   return mainClient.blockchainScripthash_getMempool(uint8ArrayToHex(reversedHash));
@@ -717,7 +719,7 @@ export const multiGetBalanceByAddress = async (addresses: string[], batchsize: n
     const scripthashes = [];
     const scripthash2addr: Record<string, string> = {};
     for (const addr of chunk) {
-      const script = bitcoin.address.toOutputScript(addr);
+      const script = bitcoin.address.toOutputScript(addr, BC2_MAINNET);
       const hash = bitcoinjs_crypto_sha256(script);
       const reversedHash = uint8ArrayToHex(new Uint8Array(hash).reverse());
       scripthashes.push(reversedHash);
@@ -761,7 +763,7 @@ export const multiGetUtxoByAddress = async function (addresses: string[], batchs
     const scripthashes = [];
     const scripthash2addr: Record<string, string> = {};
     for (const addr of chunk) {
-      const script = bitcoin.address.toOutputScript(addr);
+      const script = bitcoin.address.toOutputScript(addr, BC2_MAINNET);
       const hash = bitcoinjs_crypto_sha256(script);
       const reversedHash = uint8ArrayToHex(new Uint8Array(hash).reverse());
       scripthashes.push(reversedHash);
@@ -811,7 +813,7 @@ export const multiGetHistoryByAddress = async function (
     const scripthashes = [];
     const scripthash2addr: Record<string, string> = {};
     for (const addr of chunk) {
-      const script = bitcoin.address.toOutputScript(addr);
+      const script = bitcoin.address.toOutputScript(addr, BC2_MAINNET);
       const hash = bitcoinjs_crypto_sha256(script);
       const reversedHash = uint8ArrayToHex(new Uint8Array(hash).reverse());
       scripthashes.push(reversedHash);
