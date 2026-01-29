@@ -7,12 +7,13 @@ import { CoinSelectReturnInput } from 'coinselect';
 import ecc from '../../blue_modules/noble_ecc';
 import { concatUint8Arrays, hexToUint8Array } from '../../blue_modules/uint8array-extras';
 import { AbstractHDElectrumWallet } from './abstract-hd-electrum-wallet';
+import BC2_MAINNET, { BC2_COIN_TYPE } from '../../blue_modules/bc2-network';
 
 const bip32 = BIP32Factory(ecc);
 
 /**
  * HD Wallet (BIP39).
- * In particular, BIP49 (P2SH Segwit)
+ * In particular, BIP49 (P2SH Segwit) for BitcoinII (BC2)
  * @see https://github.com/bitcoin/bips/blob/master/bip-0049.mediawiki
  */
 export class HDSegwitP2SHWallet extends AbstractHDElectrumWallet {
@@ -23,7 +24,16 @@ export class HDSegwitP2SHWallet extends AbstractHDElectrumWallet {
   // @ts-ignore: override
   public readonly typeReadable = HDSegwitP2SHWallet.typeReadable;
   public readonly segwitType = 'p2sh(p2wpkh)';
-  static readonly derivationPath = "m/49'/0'/0'";
+
+  // BC2 derivation path: m/49'/2'/0' (coin type 2 for BC2)
+  static readonly derivationPath = `m/49'/${BC2_COIN_TYPE}'/0'`;
+
+  /**
+   * Returns the BC2 network configuration for address generation
+   */
+  getNetwork() {
+    return BC2_MAINNET;
+  }
 
   allowSend() {
     return true;
@@ -61,7 +71,7 @@ export class HDSegwitP2SHWallet extends AbstractHDElectrumWallet {
     }
     // first, getting xpub
     const seed = this._getSeed();
-    const root = bip32.fromSeed(seed);
+    const root = bip32.fromSeed(seed, this.getNetwork());
 
     const path = this.getDerivationPath();
     if (!path) {
@@ -71,6 +81,7 @@ export class HDSegwitP2SHWallet extends AbstractHDElectrumWallet {
     const xpub = child.toBase58();
 
     // bitcoinjs does not support ypub yet, so we just convert it from xpub
+    // Note: For BC2, we use the same ypub prefix (049d7cb2) as this is standard BIP49
     let data = b58.decode(xpub);
     data = data.slice(4);
     const concatenated = concatUint8Arrays([hexToUint8Array('049d7cb2'), data]);
@@ -88,8 +99,10 @@ export class HDSegwitP2SHWallet extends AbstractHDElectrumWallet {
     if (!pubkey || !path) {
       throw new Error('Internal error: pubkey or path are invalid');
     }
-    const p2wpkh = bitcoin.payments.p2wpkh({ pubkey });
-    const p2sh = bitcoin.payments.p2sh({ redeem: p2wpkh });
+
+    const p2wpkh = bitcoin.payments.p2wpkh({ pubkey, network: this.getNetwork() });
+    const p2sh = bitcoin.payments.p2sh({ redeem: p2wpkh, network: this.getNetwork() });
+
     if (!p2sh.output) {
       throw new Error('Internal error: no p2sh.output during _addPsbtInput()');
     }
@@ -120,6 +133,6 @@ export class HDSegwitP2SHWallet extends AbstractHDElectrumWallet {
   }
 
   allowSilentPaymentSend(): boolean {
-    return true;
+    return false; // Disabled for BC2 - no Silent Payments support yet
   }
 }
