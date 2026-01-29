@@ -4,8 +4,10 @@ import * as mn from 'electrum-mnemonic';
 
 import ecc from '../../blue_modules/noble_ecc';
 import { HDLegacyP2PKHWallet } from './hd-legacy-p2pkh-wallet';
+import BC2_MAINNET from '../../blue_modules/bc2-network';
 
 const bip32 = BIP32Factory(ecc);
+
 const PREFIX = mn.PREFIXES.standard;
 
 type SeedOpts = {
@@ -17,6 +19,8 @@ type SeedOpts = {
  * ElectrumSeed means that instead of BIP39 seed format it works with the format invented by Electrum wallet. Otherwise
  * its a regular HD wallet that has all the properties of parent class.
  *
+ * For Bitcoin II (BC2), generates legacy addresses starting with 'B'
+ *
  * @see https://electrum.readthedocs.io/en/latest/seedphrase.html
  */
 export class HDLegacyElectrumSeedP2PKHWallet extends HDLegacyP2PKHWallet {
@@ -27,6 +31,13 @@ export class HDLegacyElectrumSeedP2PKHWallet extends HDLegacyP2PKHWallet {
   // @ts-ignore: override
   public readonly typeReadable = HDLegacyElectrumSeedP2PKHWallet.typeReadable;
   static readonly derivationPath = 'm';
+
+  /**
+   * Returns the BC2 network configuration for address generation
+   */
+  getNetwork() {
+    return BC2_MAINNET;
+  }
 
   validateMnemonic() {
     return mn.validateMnemonic(this.secret, PREFIX);
@@ -46,8 +57,9 @@ export class HDLegacyElectrumSeedP2PKHWallet extends HDLegacyP2PKHWallet {
     }
     const args: SeedOpts = { prefix: PREFIX };
     if (this.passphrase) args.passphrase = this.passphrase;
-    const root = bip32.fromSeed(mn.mnemonicToSeedSync(this.secret, args));
+    const root = bip32.fromSeed(mn.mnemonicToSeedSync(this.secret, args), this.getNetwork());
     this._xpub = root.neutered().toBase58();
+
     return this._xpub;
   }
 
@@ -55,10 +67,12 @@ export class HDLegacyElectrumSeedP2PKHWallet extends HDLegacyP2PKHWallet {
     index = index * 1; // cast to int
     if (this.internal_addresses_cache[index]) return this.internal_addresses_cache[index]; // cache hit
 
-    const node = bip32.fromBase58(this.getXpub());
+    const node = bip32.fromBase58(this.getXpub(), this.getNetwork());
     const address = bitcoin.payments.p2pkh({
       pubkey: node.derive(1).derive(index).publicKey,
+      network: this.getNetwork(),
     }).address;
+
     if (!address) {
       throw new Error('Internal error: no address in _getInternalAddressByIndex');
     }
@@ -70,10 +84,12 @@ export class HDLegacyElectrumSeedP2PKHWallet extends HDLegacyP2PKHWallet {
     index = index * 1; // cast to int
     if (this.external_addresses_cache[index]) return this.external_addresses_cache[index]; // cache hit
 
-    const node = bip32.fromBase58(this.getXpub());
+    const node = bip32.fromBase58(this.getXpub(), this.getNetwork());
     const address = bitcoin.payments.p2pkh({
       pubkey: node.derive(0).derive(index).publicKey,
+      network: this.getNetwork(),
     }).address;
+
     if (!address) {
       throw new Error('Internal error: no address in _getExternalAddressByIndex');
     }
@@ -85,7 +101,7 @@ export class HDLegacyElectrumSeedP2PKHWallet extends HDLegacyP2PKHWallet {
     if (!this.secret) return false;
     const args: SeedOpts = { prefix: PREFIX };
     if (this.passphrase) args.passphrase = this.passphrase;
-    const root = bip32.fromSeed(mn.mnemonicToSeedSync(this.secret, args));
+    const root = bip32.fromSeed(mn.mnemonicToSeedSync(this.secret, args), this.getNetwork());
     const path = `m/${internal ? 1 : 0}/${index}`;
     const child = root.derivePath(path);
 
@@ -97,13 +113,13 @@ export class HDLegacyElectrumSeedP2PKHWallet extends HDLegacyP2PKHWallet {
 
     if (node === 0 && !this._node0) {
       const xpub = this.getXpub();
-      const hdNode = bip32.fromBase58(xpub);
+      const hdNode = bip32.fromBase58(xpub, this.getNetwork());
       this._node0 = hdNode.derive(node);
     }
 
     if (node === 1 && !this._node1) {
       const xpub = this.getXpub();
-      const hdNode = bip32.fromBase58(xpub);
+      const hdNode = bip32.fromBase58(xpub, this.getNetwork());
       this._node1 = hdNode.derive(node);
     }
 
