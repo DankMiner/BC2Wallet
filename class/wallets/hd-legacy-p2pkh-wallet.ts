@@ -1,3 +1,4 @@
+
 import BIP32Factory, { BIP32Interface } from 'bip32';
 import { Psbt } from 'bitcoinjs-lib';
 import { CoinSelectReturnInput } from 'coinselect';
@@ -6,12 +7,14 @@ import * as BlueElectrum from '../../blue_modules/BlueElectrum';
 import ecc from '../../blue_modules/noble_ecc';
 import { AbstractHDElectrumWallet } from './abstract-hd-electrum-wallet';
 import { hexToUint8Array } from '../../blue_modules/uint8array-extras';
+import BC2_MAINNET, { BC2_COIN_TYPE } from '../../blue_modules/bc2-network';
 
 const bip32 = BIP32Factory(ecc);
 
 /**
  * HD Wallet (BIP39).
- * In particular, BIP44 (P2PKH legacy addressess)
+ * In particular, BIP44 (P2PKH legacy addresses) for Bitcoin II (BC2)
+ * Generates addresses starting with 'B'
  * @see https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
  */
 export class HDLegacyP2PKHWallet extends AbstractHDElectrumWallet {
@@ -21,7 +24,16 @@ export class HDLegacyP2PKHWallet extends AbstractHDElectrumWallet {
   public readonly type = HDLegacyP2PKHWallet.type;
   // @ts-ignore: override
   public readonly typeReadable = HDLegacyP2PKHWallet.typeReadable;
-  static readonly derivationPath = "m/44'/0'/0'";
+
+  // BC2 derivation path: m/44'/2'/0' (coin type 2 for BC2)
+  static readonly derivationPath = `m/44'/${BC2_COIN_TYPE}'/0'`;
+
+  /**
+   * Returns the BC2 network configuration for address generation
+   */
+  getNetwork() {
+    return BC2_MAINNET;
+  }
 
   allowSend() {
     return true;
@@ -44,7 +56,7 @@ export class HDLegacyP2PKHWallet extends AbstractHDElectrumWallet {
   }
 
   allowBIP47() {
-    return true;
+    return false; // Disabled for BC2 - no BIP47 support yet
   }
 
   getXpub() {
@@ -52,7 +64,7 @@ export class HDLegacyP2PKHWallet extends AbstractHDElectrumWallet {
       return this._xpub; // cache hit
     }
     const seed = this._getSeed();
-    const root = bip32.fromSeed(seed);
+    const root = bip32.fromSeed(seed, this.getNetwork());
 
     const path = this.getDerivationPath();
     if (!path) {
@@ -112,6 +124,6 @@ export class HDLegacyP2PKHWallet extends AbstractHDElectrumWallet {
   }
 
   allowSilentPaymentSend(): boolean {
-    return true;
+    return false; // Disabled for BC2 - no Silent Payments support yet
   }
 }
