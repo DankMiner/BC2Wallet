@@ -6,6 +6,7 @@ import * as mn from 'electrum-mnemonic';
 import ecc from '../../blue_modules/noble_ecc';
 import { concatUint8Arrays, hexToUint8Array } from '../../blue_modules/uint8array-extras';
 import { HDSegwitBech32Wallet } from './hd-segwit-bech32-wallet';
+import BC2_MAINNET from '../../blue_modules/bc2-network';
 
 const bip32 = BIP32Factory(ecc);
 const PREFIX = mn.PREFIXES.segwit;
@@ -19,6 +20,8 @@ type SeedOpts = {
  * ElectrumSeed means that instead of BIP39 seed format it works with the format invented by Electrum wallet. Otherwise
  * its a regular HD wallet that has all the properties of parent class.
  *
+ * For Bitcoin II (BC2), generates native SegWit addresses starting with 'bc21q'
+ *
  * @see https://electrum.readthedocs.io/en/latest/seedphrase.html
  */
 export class HDSegwitElectrumSeedP2WPKHWallet extends HDSegwitBech32Wallet {
@@ -29,6 +32,13 @@ export class HDSegwitElectrumSeedP2WPKHWallet extends HDSegwitBech32Wallet {
   // @ts-ignore: override
   public readonly typeReadable = HDSegwitElectrumSeedP2WPKHWallet.typeReadable;
   static readonly derivationPath = "m/0'";
+
+  /**
+   * Returns the BC2 network configuration for address generation
+   */
+  getNetwork() {
+    return BC2_MAINNET;
+  }
 
   validateMnemonic() {
     return mn.validateMnemonic(this.secret, PREFIX);
@@ -48,10 +58,11 @@ export class HDSegwitElectrumSeedP2WPKHWallet extends HDSegwitBech32Wallet {
     }
     const args: SeedOpts = { prefix: PREFIX };
     if (this.passphrase) args.passphrase = this.passphrase;
-    const root = bip32.fromSeed(mn.mnemonicToSeedSync(this.secret, args));
+    const root = bip32.fromSeed(mn.mnemonicToSeedSync(this.secret, args), this.getNetwork());
     const xpub = root.derivePath("m/0'").neutered().toBase58();
 
     // bitcoinjs does not support zpub yet, so we just convert it from xpub
+    // Note: For BC2, we use the same zpub prefix (04b24746) as this is standard BIP84
     let data = b58.decode(xpub);
     data = data.slice(4);
     const concatenated = concatUint8Arrays([hexToUint8Array('04b24746'), data]);
@@ -65,9 +76,10 @@ export class HDSegwitElectrumSeedP2WPKHWallet extends HDSegwitBech32Wallet {
     if (this.internal_addresses_cache[index]) return this.internal_addresses_cache[index]; // cache hit
 
     const xpub = this._zpubToXpub(this.getXpub());
-    const node = bip32.fromBase58(xpub);
+    const node = bip32.fromBase58(xpub, this.getNetwork());
     const address = bitcoin.payments.p2wpkh({
       pubkey: node.derive(1).derive(index).publicKey,
+      network: this.getNetwork(),
     }).address;
     if (!address) {
       throw new Error('Internal error: no address in _getInternalAddressByIndex');
@@ -81,9 +93,10 @@ export class HDSegwitElectrumSeedP2WPKHWallet extends HDSegwitBech32Wallet {
     if (this.external_addresses_cache[index]) return this.external_addresses_cache[index]; // cache hit
 
     const xpub = this._zpubToXpub(this.getXpub());
-    const node = bip32.fromBase58(xpub);
+    const node = bip32.fromBase58(xpub, this.getNetwork());
     const address = bitcoin.payments.p2wpkh({
       pubkey: node.derive(0).derive(index).publicKey,
+      network: this.getNetwork(),
     }).address;
     if (!address) {
       throw new Error('Internal error: no address in _getExternalAddressByIndex');
@@ -96,7 +109,7 @@ export class HDSegwitElectrumSeedP2WPKHWallet extends HDSegwitBech32Wallet {
     if (!this.secret) return false;
     const args: SeedOpts = { prefix: PREFIX };
     if (this.passphrase) args.passphrase = this.passphrase;
-    const root = bip32.fromSeed(mn.mnemonicToSeedSync(this.secret, args));
+    const root = bip32.fromSeed(mn.mnemonicToSeedSync(this.secret, args), this.getNetwork());
     const path = `m/0'/${internal ? 1 : 0}/${index}`;
     const child = root.derivePath(path);
 
@@ -108,13 +121,13 @@ export class HDSegwitElectrumSeedP2WPKHWallet extends HDSegwitBech32Wallet {
 
     if (node === 0 && !this._node0) {
       const xpub = this._zpubToXpub(this.getXpub());
-      const hdNode = bip32.fromBase58(xpub);
+      const hdNode = bip32.fromBase58(xpub, this.getNetwork());
       this._node0 = hdNode.derive(node);
     }
 
     if (node === 1 && !this._node1) {
       const xpub = this._zpubToXpub(this.getXpub());
-      const hdNode = bip32.fromBase58(xpub);
+      const hdNode = bip32.fromBase58(xpub, this.getNetwork());
       this._node1 = hdNode.derive(node);
     }
 
